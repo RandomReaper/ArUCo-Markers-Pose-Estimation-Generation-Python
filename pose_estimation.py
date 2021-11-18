@@ -33,7 +33,7 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
         cameraMatrix=matrix_coefficients,
         distCoeff=distortion_coefficients)
 
-        # If markers are detected
+    # If markers are detected
     if len(corners) > 0:
         for i in range(0, len(ids)):
             # Estimate pose of each marker and return the values rvec and tvec---(different from those of camera coefficients)
@@ -44,6 +44,53 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
 
             # Draw Axis
             cv2.aruco.drawAxis(frame, matrix_coefficients, distortion_coefficients, rvec, tvec, 0.01)
+
+            axis = np.float32([[-0.5, -0.5, 0], [-0.5, 0.5, 0], [0.5, 0.5, 0], [0.5, -0.5, 0], [-0.5, -0.5, 1], [-0.5, 0.5, 1], [0.5, 0.5, 1],[0.5, -0.5, 1]])
+            # Now we transform the cube to the marker position and project the resulting points into 2d
+            imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx,dist)
+            imgpts = np.int32(imgpts).reshape(-1, 2)
+
+            # Now comes the drawing.
+            # In this example, I would like to draw the cube so that the walls also get a painted
+            # First create six copies of the original picture (for each side of the cube one)
+            side1 = frame.copy()
+            side2 = frame.copy()
+            side3 = frame.copy()
+            side4 = frame.copy()
+            side5 = frame.copy()
+            side6 = frame.copy()
+            # Draw the bottom side (over the marker)
+            side1 = cv2.drawContours(side1, [imgpts[:4]], -1, (255, 0, 0), -2)
+            # Draw the top side (opposite of the marker)
+            side2 = cv2.drawContours(side2, [imgpts[4:]], -1, (255, 0, 0), -2)
+            # Draw the right side vertical to the marker
+            side3 = cv2.drawContours(side3, [np.array(
+                [imgpts[0], imgpts[1], imgpts[5],
+                imgpts[4]])], -1, (255, 0, 0), -2)
+            # Draw the left side vertical to the marker
+            side4 = cv2.drawContours(side4, [np.array(
+                [imgpts[2], imgpts[3], imgpts[7],
+                imgpts[6]])], -1, (255, 0, 0), -2)
+            # Draw the front side vertical to the marker
+            side5 = cv2.drawContours(side5, [np.array(
+                [imgpts[1], imgpts[2], imgpts[6],
+                imgpts[5]])], -1, (255, 0, 0), -2)
+            # Draw the back side vertical to the marker
+            side6 = cv2.drawContours(side6, [np.array(
+                [imgpts[0], imgpts[3], imgpts[7],
+                imgpts[4]])], -1, (255, 0, 0), -2)
+            frame = cv2.addWeighted(side1, 0.1, frame, 0.9, 0)
+            frame = cv2.addWeighted(side2, 0.1, frame, 0.9, 0)
+            frame = cv2.addWeighted(side3, 0.1, frame, 0.9, 0)
+            frame = cv2.addWeighted(side4, 0.1, frame, 0.9, 0)
+            frame = cv2.addWeighted(side5, 0.1, frame, 0.9, 0)
+            frame = cv2.addWeighted(side6, 0.1, frame, 0.9, 0)
+
+            # Now the edges of the cube are drawn thicker and stronger
+            frame = cv2.drawContours(frame, [imgpts[:4]], -1, (255, 0, 0), 2)
+            for i, j in zip(range(4), range(4, 8)):
+                frame = cv2.line(frame, tuple(imgpts[i]), tuple(imgpts[j]), (255, 0, 0), 2)
+            frame = cv2.drawContours(frame, [imgpts[4:]], -1, (255, 0, 0), 2)
 
             if 1:
                 x=int(corners[i].reshape((4, 2))[0][0])
@@ -103,6 +150,8 @@ if __name__ == '__main__':
     d = np.load(distortion_coefficients_path)
 
     video = cv2.VideoCapture(1)
+    video.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 600)
     time.sleep(2.0)
 
     while True:
