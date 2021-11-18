@@ -10,6 +10,7 @@ import sys
 from utils import ARUCO_DICT
 import argparse
 import time
+import math
 
 
 def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coefficients):
@@ -26,7 +27,7 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     cv2.aruco_dict = cv2.aruco.Dictionary_get(aruco_dict_type)
     parameters = cv2.aruco.DetectorParameters_create()
-
+    parameters.detectInvertedMarker = 1
 
     corners, ids, rejected_img_points = cv2.aruco.detectMarkers(gray, cv2.aruco_dict,parameters=parameters,
         cameraMatrix=matrix_coefficients,
@@ -36,13 +37,48 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
     if len(corners) > 0:
         for i in range(0, len(ids)):
             # Estimate pose of each marker and return the values rvec and tvec---(different from those of camera coefficients)
-            rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(corners[i], 0.02, matrix_coefficients,
+            rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(corners[i], 20, matrix_coefficients,
                                                                        distortion_coefficients)
             # Draw a square around the markers
-            cv2.aruco.drawDetectedMarkers(frame, corners) 
+            cv2.aruco.drawDetectedMarkers(frame, corners)
 
             # Draw Axis
-            cv2.aruco.drawAxis(frame, matrix_coefficients, distortion_coefficients, rvec, tvec, 0.01)  
+            cv2.aruco.drawAxis(frame, matrix_coefficients, distortion_coefficients, rvec, tvec, 0.01)
+
+            if 1:
+                x=int(corners[i].reshape((4, 2))[0][0])
+                y=int(corners[i].reshape((4, 2))[0][1])
+                cv2.putText(frame, str(ids[i])[1:-1],
+                    (x, y - 15),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 255, 0), 2)
+
+            if ids[i] == 0:
+                (x,y,z) = tvec.reshape(3,1)
+                x = x[0]
+                y = y[0]
+                z = z[0]
+                cv2.putText(frame, "x:{}".format(int(x)),
+                    (0, 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 255, 0), 2)
+                cv2.putText(frame, "y:{}".format(int(y)),
+                    (0, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 255, 0), 2)
+                cv2.putText(frame, "z:{}".format(int(z)),
+                    (0, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 255, 0), 2)
+                x1=int(corners[i].reshape((4, 2))[0][0])
+                y1=int(corners[i].reshape((4, 2))[0][1])
+                x2=int(corners[i].reshape((4, 2))[1][0])
+                y2=int(corners[i].reshape((4, 2))[1][1])
+                a=math.degrees(math.atan2(y2-y1,x2-x1))
+                cv2.putText(frame, "angle:{}".format(int(a)),
+                    (0, 80),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 255, 0), 2)
 
     return frame
 
@@ -54,7 +90,7 @@ if __name__ == '__main__':
     ap.add_argument("-t", "--type", type=str, default="DICT_ARUCO_ORIGINAL", help="Type of ArUCo tag to detect")
     args = vars(ap.parse_args())
 
-    
+
     if ARUCO_DICT.get(args["type"], None) is None:
         print(f"ArUCo tag type '{args['type']}' is not supported")
         sys.exit(0)
@@ -62,11 +98,11 @@ if __name__ == '__main__':
     aruco_dict_type = ARUCO_DICT[args["type"]]
     calibration_matrix_path = args["K_Matrix"]
     distortion_coefficients_path = args["D_Coeff"]
-    
+
     k = np.load(calibration_matrix_path)
     d = np.load(distortion_coefficients_path)
 
-    video = cv2.VideoCapture(0)
+    video = cv2.VideoCapture(1)
     time.sleep(2.0)
 
     while True:
@@ -74,7 +110,7 @@ if __name__ == '__main__':
 
         if not ret:
             break
-        
+
         output = pose_esitmation(frame, aruco_dict_type, k, d)
 
         cv2.imshow('Estimated Pose', output)
