@@ -64,11 +64,7 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
     return:-
     frame - The frame with the axis drawn on it
     '''
-
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    cv2.aruco_dict = cv2.aruco.Dictionary_get(aruco_dict_type)
-    parameters = cv2.aruco.DetectorParameters_create()
-    parameters.detectInvertedMarker = 1
 
     corners, ids, rejected_img_points = cv2.aruco.detectMarkers(gray, cv2.aruco_dict,parameters=parameters,
         cameraMatrix=matrix_coefficients,
@@ -81,14 +77,14 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
             rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(corners[i], marker_size_mm, matrix_coefficients,
                                                                        distortion_coefficients)
             # Draw a square around the markers
-            if 1:
+            if args['preview']:
                 cv2.aruco.drawDetectedMarkers(frame, corners)
 
             # Draw Axis
-            if 1:
+            if args['preview']:
                 cv2.aruco.drawAxis(frame, matrix_coefficients, distortion_coefficients, rvec, tvec, 10)
 
-            if 1:
+            if args['preview']:
                 x=int(corners[i].reshape((4, 2))[0][0])
                 y=int(corners[i].reshape((4, 2))[0][1])
                 cv2.putText(frame, str(ids[i])[1:-1],
@@ -96,11 +92,22 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.5, (0, 255, 0), 2)
 
-            if ids[i] == 3:
-                (x,y,z) = tvec.reshape(3,1)
-                x = x[0]
-                y = y[0]
-                z = z[0]
+            #-- Obtain the rotation matrix tag->camera
+            R_ct    = np.matrix(cv2.Rodrigues(rvec)[0])
+            R_tc    = R_ct.T
+
+            #-- Get the attitude in terms of euler 321 (Needs to be flipped first)
+            roll_marker, pitch_marker, yaw_marker = rotationMatrixToEulerAngles(R_flip*R_tc)
+
+            a=math.degrees(yaw_marker)
+
+            (x,y,z) = tvec.reshape(3,1)
+            x = x[0]
+            y = y[0]
+            z = z[0]
+            #print("id:{},x:{},y:{},z:{},a={}".format(ids[i], x, y, z, a))
+
+            if ids[i] == 3 and args['preview']:
                 cv2.putText(frame, "x:{}".format(int(x)),
                     (0, 20),
                     font,
@@ -113,19 +120,7 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
                     (0, 60),
                     font,
                     0.5, (0, 255, 0), 2)
-                x1=int(corners[i].reshape((4, 2))[0][0])
-                y1=int(corners[i].reshape((4, 2))[0][1])
-                x2=int(corners[i].reshape((4, 2))[1][0])
-                y2=int(corners[i].reshape((4, 2))[1][1])
 
-                #-- Obtain the rotation matrix tag->camera
-                R_ct    = np.matrix(cv2.Rodrigues(rvec)[0])
-                R_tc    = R_ct.T
-
-                #-- Get the attitude in terms of euler 321 (Needs to be flipped first)
-                roll_marker, pitch_marker, yaw_marker = rotationMatrixToEulerAngles(R_flip*R_tc)
-
-                a=math.degrees(yaw_marker)
                 cv2.putText(frame, "angle:{}".format(int(a)),
                     (0, 80),
                     font,
@@ -138,6 +133,7 @@ if __name__ == '__main__':
     ap.add_argument("-k", "--K_Matrix", required=True, help="Path to calibration matrix (numpy file)")
     ap.add_argument("-d", "--D_Coeff", required=True, help="Path to distortion coefficients (numpy file)")
     ap.add_argument("-t", "--type", type=str, default="DICT_ARUCO_ORIGINAL", help="Type of ArUCo tag to detect")
+    ap.add_argument('-p', "--preview", action='store_true')
     args = vars(ap.parse_args())
 
 
@@ -155,7 +151,13 @@ if __name__ == '__main__':
     video = cv2.VideoCapture(1)
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 600)
-    time.sleep(0.0)
+    video.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+    video.set(cv2.CAP_PROP_FOCUS, 50)
+
+
+    cv2.aruco_dict = cv2.aruco.Dictionary_get(aruco_dict_type)
+    parameters = cv2.aruco.DetectorParameters_create()
+    parameters.detectInvertedMarker = 1
 
     while True:
         ret, frame = video.read()
@@ -165,11 +167,12 @@ if __name__ == '__main__':
 
         output = pose_esitmation(frame, aruco_dict_type, k, d)
 
-        cv2.imshow('Estimated Pose', output)
+        if (args['preview']):
+            cv2.imshow('Estimated Pose', output)
 
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            break
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                break
 
     video.release()
     cv2.destroyAllWindows()
