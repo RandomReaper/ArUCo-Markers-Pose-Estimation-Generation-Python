@@ -12,6 +12,47 @@ import argparse
 import time
 import math
 
+font = cv2.FONT_HERSHEY_SIMPLEX
+#--- 180 deg rotation matrix around the x axis
+R_flip  = np.zeros((3,3), dtype=np.float32)
+R_flip[0,0] = 1.0
+R_flip[1,1] =-1.0
+R_flip[2,2] =-1.0
+
+marker_size_mm = 20
+
+#------------------------------------------------------------------------------
+#------- ROTATIONS https://www.learnopencv.com/rotation-matrix-to-euler-angles/
+#------------------------------------------------------------------------------
+# Checks if a matrix is a valid rotation matrix.
+def isRotationMatrix(R):
+    Rt = np.transpose(R)
+    shouldBeIdentity = np.dot(Rt, R)
+    I = np.identity(3, dtype=R.dtype)
+    n = np.linalg.norm(I - shouldBeIdentity)
+    return n < 1e-6
+
+
+# Calculates rotation matrix to euler angles
+# The result is the same as MATLAB except the order
+# of the euler angles ( x and z are swapped ).
+def rotationMatrixToEulerAngles(R):
+    assert (isRotationMatrix(R))
+
+    sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
+
+    singular = sy < 1e-6
+
+    if not singular:
+        x = math.atan2(R[2, 1], R[2, 2])
+        y = math.atan2(-R[2, 0], sy)
+        z = math.atan2(R[1, 0], R[0, 0])
+    else:
+        x = math.atan2(-R[1, 2], R[1, 1])
+        y = math.atan2(-R[2, 0], sy)
+        z = 0
+
+    return np.array([x, y, z])
 
 def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coefficients):
 
@@ -37,60 +78,15 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
     if len(corners) > 0:
         for i in range(0, len(ids)):
             # Estimate pose of each marker and return the values rvec and tvec---(different from those of camera coefficients)
-            rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(corners[i], 20, matrix_coefficients,
+            rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(corners[i], marker_size_mm, matrix_coefficients,
                                                                        distortion_coefficients)
             # Draw a square around the markers
-            cv2.aruco.drawDetectedMarkers(frame, corners)
+            if 1:
+                cv2.aruco.drawDetectedMarkers(frame, corners)
 
             # Draw Axis
-            cv2.aruco.drawAxis(frame, matrix_coefficients, distortion_coefficients, rvec, tvec, 0.01)
-
-            axis = np.float32([[-0.5, -0.5, 0], [-0.5, 0.5, 0], [0.5, 0.5, 0], [0.5, -0.5, 0], [-0.5, -0.5, 1], [-0.5, 0.5, 1], [0.5, 0.5, 1],[0.5, -0.5, 1]])
-            # Now we transform the cube to the marker position and project the resulting points into 2d
-            imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx,dist)
-            imgpts = np.int32(imgpts).reshape(-1, 2)
-
-            # Now comes the drawing.
-            # In this example, I would like to draw the cube so that the walls also get a painted
-            # First create six copies of the original picture (for each side of the cube one)
-            side1 = frame.copy()
-            side2 = frame.copy()
-            side3 = frame.copy()
-            side4 = frame.copy()
-            side5 = frame.copy()
-            side6 = frame.copy()
-            # Draw the bottom side (over the marker)
-            side1 = cv2.drawContours(side1, [imgpts[:4]], -1, (255, 0, 0), -2)
-            # Draw the top side (opposite of the marker)
-            side2 = cv2.drawContours(side2, [imgpts[4:]], -1, (255, 0, 0), -2)
-            # Draw the right side vertical to the marker
-            side3 = cv2.drawContours(side3, [np.array(
-                [imgpts[0], imgpts[1], imgpts[5],
-                imgpts[4]])], -1, (255, 0, 0), -2)
-            # Draw the left side vertical to the marker
-            side4 = cv2.drawContours(side4, [np.array(
-                [imgpts[2], imgpts[3], imgpts[7],
-                imgpts[6]])], -1, (255, 0, 0), -2)
-            # Draw the front side vertical to the marker
-            side5 = cv2.drawContours(side5, [np.array(
-                [imgpts[1], imgpts[2], imgpts[6],
-                imgpts[5]])], -1, (255, 0, 0), -2)
-            # Draw the back side vertical to the marker
-            side6 = cv2.drawContours(side6, [np.array(
-                [imgpts[0], imgpts[3], imgpts[7],
-                imgpts[4]])], -1, (255, 0, 0), -2)
-            frame = cv2.addWeighted(side1, 0.1, frame, 0.9, 0)
-            frame = cv2.addWeighted(side2, 0.1, frame, 0.9, 0)
-            frame = cv2.addWeighted(side3, 0.1, frame, 0.9, 0)
-            frame = cv2.addWeighted(side4, 0.1, frame, 0.9, 0)
-            frame = cv2.addWeighted(side5, 0.1, frame, 0.9, 0)
-            frame = cv2.addWeighted(side6, 0.1, frame, 0.9, 0)
-
-            # Now the edges of the cube are drawn thicker and stronger
-            frame = cv2.drawContours(frame, [imgpts[:4]], -1, (255, 0, 0), 2)
-            for i, j in zip(range(4), range(4, 8)):
-                frame = cv2.line(frame, tuple(imgpts[i]), tuple(imgpts[j]), (255, 0, 0), 2)
-            frame = cv2.drawContours(frame, [imgpts[4:]], -1, (255, 0, 0), 2)
+            if 1:
+                cv2.aruco.drawAxis(frame, matrix_coefficients, distortion_coefficients, rvec, tvec, 10)
 
             if 1:
                 x=int(corners[i].reshape((4, 2))[0][0])
@@ -100,33 +96,40 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.5, (0, 255, 0), 2)
 
-            if ids[i] == 0:
+            if ids[i] == 3:
                 (x,y,z) = tvec.reshape(3,1)
                 x = x[0]
                 y = y[0]
                 z = z[0]
                 cv2.putText(frame, "x:{}".format(int(x)),
                     (0, 20),
-                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font,
                     0.5, (0, 255, 0), 2)
                 cv2.putText(frame, "y:{}".format(int(y)),
                     (0, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font,
                     0.5, (0, 255, 0), 2)
                 cv2.putText(frame, "z:{}".format(int(z)),
                     (0, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font,
                     0.5, (0, 255, 0), 2)
                 x1=int(corners[i].reshape((4, 2))[0][0])
                 y1=int(corners[i].reshape((4, 2))[0][1])
                 x2=int(corners[i].reshape((4, 2))[1][0])
                 y2=int(corners[i].reshape((4, 2))[1][1])
-                a=math.degrees(math.atan2(y2-y1,x2-x1))
+
+                #-- Obtain the rotation matrix tag->camera
+                R_ct    = np.matrix(cv2.Rodrigues(rvec)[0])
+                R_tc    = R_ct.T
+
+                #-- Get the attitude in terms of euler 321 (Needs to be flipped first)
+                roll_marker, pitch_marker, yaw_marker = rotationMatrixToEulerAngles(R_flip*R_tc)
+
+                a=math.degrees(yaw_marker)
                 cv2.putText(frame, "angle:{}".format(int(a)),
                     (0, 80),
-                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font,
                     0.5, (0, 255, 0), 2)
-
     return frame
 
 if __name__ == '__main__':
@@ -152,7 +155,7 @@ if __name__ == '__main__':
     video = cv2.VideoCapture(1)
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 600)
-    time.sleep(2.0)
+    time.sleep(0.0)
 
     while True:
         ret, frame = video.read()
