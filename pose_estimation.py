@@ -105,7 +105,7 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
             x = x[0]
             y = y[0]
             z = z[0]
-            #print("id:{},x:{},y:{},z:{},a={}".format(ids[i], x, y, z, a))
+            print("id:{},x:{},y:{},z:{},a={}".format(ids[i], x, y, z, a))
 
             if ids[i] == 3 and args['preview']:
                 cv2.putText(frame, "x:{}".format(int(x)),
