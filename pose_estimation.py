@@ -1,9 +1,9 @@
+#!/usr/bin/env python3
 '''
-Sample Usage:-
-python pose_estimation.py --K_Matrix calibration_matrix.npy --D_Coeff distortion_coefficients.npy --type DICT_5X5_100
+This program will estimate pose of ArUCo markers
+  * Sample usage : ./pose_estimation.py
+  * Help         : ./pose_esitmation.py -h
 '''
-
-
 import numpy as np
 import cv2
 import sys
@@ -11,6 +11,8 @@ from utils import ARUCO_DICT
 import argparse
 import time
 import math
+import stat
+import os
 
 font = cv2.FONT_HERSHEY_SIMPLEX
 #--- 180 deg rotation matrix around the x axis
@@ -19,12 +21,10 @@ R_flip[0,0] = 1.0
 R_flip[1,1] =-1.0
 R_flip[2,2] =-1.0
 
-marker_size_mm = 20
-
 #------------------------------------------------------------------------------
-#------- ROTATIONS https://www.learnopencv.com/rotation-matrix-to-euler-angles/
+# Rotations functions where kindly borrowed from :
+# https://www.learnopencv.com/rotation-matrix-to-euler-angles/
 #------------------------------------------------------------------------------
-# Checks if a matrix is a valid rotation matrix.
 def isRotationMatrix(R):
     Rt = np.transpose(R)
     shouldBeIdentity = np.dot(Rt, R)
@@ -54,15 +54,21 @@ def rotationMatrixToEulerAngles(R):
 
     return np.array([x, y, z])
 
-def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coefficients):
+#------------------------------------------------------------------------------
+# End of code borrow
+#------------------------------------------------------------------------------
+
+
+def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coefficients, marker_size_mm):
 
     '''
     frame - Frame from the video stream
     matrix_coefficients - Intrinsic matrix of the calibrated camera
     distortion_coefficients - Distortion coefficients associated with your camera
+    marker_size_mm - The size of a marker
 
     return:-
-    frame - The frame with the axis drawn on it
+    frame - The frame with some info on it
     '''
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -149,12 +155,18 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
 
 if __name__ == '__main__':
 
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-k", "--K_Matrix", required=True, help="Path to calibration matrix (numpy file)")
-    ap.add_argument("-d", "--D_Coeff", required=True, help="Path to distortion coefficients (numpy file)")
-    ap.add_argument("-t", "--type", type=str, default="DICT_ARUCO_ORIGINAL", help="Type of ArUCo tag to detect")
-    ap.add_argument('-p', "--preview", action='store_true')
-    ap.add_argument('-f', "--framerate", type=int, default=10)
+    # Manage program parameters
+    ap = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    ap.add_argument("-d", "--device", type=str, default="/dev/video0", help="name of the video device or filename of a video")
+    ap.add_argument("-k", "--K_Matrix", type=str, default="calibration_matrix.npy", help="Path to calibration matrix (numpy file)")
+    ap.add_argument("-c", "--D_Coeff", type=str, default="distortion_coefficients.npy", help="Path to distortion coefficients (numpy file)")
+    ap.add_argument('-m', "--marker_size_mm", type=int, default=20, help="Size of one side of a maker in mm")
+    ap.add_argument('-f', "--framerate", type=int, default=10, help="Limit the processed frame rate (does not change the camera parameters), ignored when using a video file")
+    ap.add_argument("-t", "--type", type=str, default="DICT_6X6_1000", help="Type of ArUCo tag to detect")
+    ap.add_argument('-p', "--preview", action='store_true', help="Show a preview window")
+    ap.add_argument('-x', "--focus", type=int, default=50, help="cv2.CAP_PROP_FOCUS")
+    ap.add_argument('-r', "--resolution", nargs=2, type=int, default=(800,600), help="resolution")
+
     args = vars(ap.parse_args())
 
     if ARUCO_DICT.get(args["type"], None) is None:
@@ -164,38 +176,56 @@ if __name__ == '__main__':
     aruco_dict_type = ARUCO_DICT[args["type"]]
     calibration_matrix_path = args["K_Matrix"]
     distortion_coefficients_path = args["D_Coeff"]
+    marker_size_mm = args["marker_size_mm"]
+    frame_rate = args['framerate']
+    video_file = args['device']
 
+    # Load calibratino
     k = np.load(calibration_matrix_path)
     d = np.load(distortion_coefficients_path)
 
-    video = cv2.VideoCapture(1)
-    video.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
-    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 600)
-    video.set(cv2.CAP_PROP_AUTOFOCUS, 0)
-    video.set(cv2.CAP_PROP_FOCUS, 50)
+    device = False
+    # Open the video device/file
+    if (stat.S_ISCHR(os.lstat(video_file)[stat.ST_MODE])):
+        device = True
 
+    if device:
+        video = cv2.VideoCapture(video_file, cv2.CAP_V4L)
+    else:
+        video = cv2.VideoCapture(video_file)
+
+    if not video.isOpened():
+        sys.exit(f"can't open video (file/device): '{video_file}'")
+
+    # Setup video parameters
+    if device:
+        video.set(cv2.CAP_PROP_FRAME_WIDTH, args['resolution'][0])
+        video.set(cv2.CAP_PROP_FRAME_HEIGHT, args['resolution'][1])
+        video.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+        video.set(cv2.CAP_PROP_FOCUS, args['focus'])
+
+    # Aruco options
     cv2.aruco_dict = cv2.aruco.Dictionary_get(aruco_dict_type)
     parameters = cv2.aruco.DetectorParameters_create()
     parameters.detectInvertedMarker = 0
 
-    frame_rate = args['framerate']
-    print(f"frame_rate:{frame_rate}")
+    # Do the work
     prev = 0
-
     while True:
-        time_elapsed = time.time() - prev
+        now = time.time()
+        time_elapsed = now - prev
         ret = video.grab()
 
         if not ret:
             break
 
-        if time_elapsed > 1./frame_rate:
-            prev = time.time()
+        if time_elapsed > 1./frame_rate or not device:
+            prev = now
             ret, frame = video.retrieve()
             if not ret:
                 break
 
-            output = pose_esitmation(frame, aruco_dict_type, k, d)
+            output = pose_esitmation(frame, aruco_dict_type, k, d, marker_size_mm)
 
             if (args['preview']):
                 cv2.imshow('Estimated Pose', output)
