@@ -99,13 +99,21 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
             #-- Get the attitude in terms of euler 321 (Needs to be flipped first)
             roll_marker, pitch_marker, yaw_marker = rotationMatrixToEulerAngles(R_flip*R_tc)
 
-            a=math.degrees(yaw_marker)
+            yaw=math.degrees(yaw_marker)
+            pitch=math.degrees(pitch_marker)
+            roll=math.degrees(roll_marker)
 
             (x,y,z) = tvec.reshape(3,1)
             x = x[0]
             y = y[0]
             z = z[0]
-            print("id:{},x:{},y:{},z:{},a={}".format(ids[i], x, y, z, a), flush=True)
+
+            print(f"id:{int(ids[i]):03d},"
+                    +f"x:{x:+08.3f},"
+                    +f"y:{y:+08.3f},"
+                    +f"z:{z:+08.3f},"
+                    +f"a:{yaw:+08.3f}"
+                , flush=True)
 
             if ids[i] == 3 and args['preview']:
                 cv2.putText(frame, "x:{}".format(int(x)),
@@ -121,10 +129,22 @@ def pose_esitmation(frame, aruco_dict_type, matrix_coefficients, distortion_coef
                     font,
                     0.5, (0, 255, 0), 2)
 
-                cv2.putText(frame, "angle:{}".format(int(a)),
+                cv2.putText(frame, "yaw:{}".format(int(yaw)),
                     (0, 80),
                     font,
                     0.5, (0, 255, 0), 2)
+
+                cv2.putText(frame, "pitch:{}".format(int(pitch)),
+                    (0, 100),
+                    font,
+                    0.5, (0, 255, 0), 2)
+
+                cv2.putText(frame, "roll:{}".format(int(roll)),
+                    (0, 120),
+                    font,
+                    0.5, (0, 255, 0), 2)
+    else:
+        print("NO_MARKER")
     return frame
 
 if __name__ == '__main__':
@@ -134,8 +154,8 @@ if __name__ == '__main__':
     ap.add_argument("-d", "--D_Coeff", required=True, help="Path to distortion coefficients (numpy file)")
     ap.add_argument("-t", "--type", type=str, default="DICT_ARUCO_ORIGINAL", help="Type of ArUCo tag to detect")
     ap.add_argument('-p', "--preview", action='store_true')
+    ap.add_argument('-f', "--framerate", type=int, default=10)
     args = vars(ap.parse_args())
-
 
     if ARUCO_DICT.get(args["type"], None) is None:
         print(f"ArUCo tag type '{args['type']}' is not supported")
@@ -154,25 +174,34 @@ if __name__ == '__main__':
     video.set(cv2.CAP_PROP_AUTOFOCUS, 0)
     video.set(cv2.CAP_PROP_FOCUS, 50)
 
-
     cv2.aruco_dict = cv2.aruco.Dictionary_get(aruco_dict_type)
     parameters = cv2.aruco.DetectorParameters_create()
     parameters.detectInvertedMarker = 1
 
+    frame_rate = args['framerate']
+    print(f"frame_rate:{frame_rate}")
+    prev = 0
+
     while True:
+        time_elapsed = time.time() - prev
         ret, frame = video.read()
 
         if not ret:
             break
 
-        output = pose_esitmation(frame, aruco_dict_type, k, d)
+        if time_elapsed > 1./frame_rate:
+            prev = time.time()
 
-        if (args['preview']):
-            cv2.imshow('Estimated Pose', output)
+            output = pose_esitmation(frame, aruco_dict_type, k, d)
 
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                break
+            if (args['preview']):
+                cv2.imshow('Estimated Pose', output)
+
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
+                    break
+        else:
+            print("drop")
 
     video.release()
     cv2.destroyAllWindows()
