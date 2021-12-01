@@ -176,7 +176,7 @@ if __name__ == '__main__':
 
     cv2.aruco_dict = cv2.aruco.Dictionary_get(aruco_dict_type)
     parameters = cv2.aruco.DetectorParameters_create()
-    parameters.detectInvertedMarker = 1
+    parameters.detectInvertedMarker = 0
 
     frame_rate = args['framerate']
     print(f"frame_rate:{frame_rate}")
@@ -184,13 +184,16 @@ if __name__ == '__main__':
 
     while True:
         time_elapsed = time.time() - prev
-        ret, frame = video.read()
+        ret = video.grab()
 
         if not ret:
             break
 
         if time_elapsed > 1./frame_rate:
             prev = time.time()
+            ret, frame = video.retrieve()
+            if not ret:
+                break
 
             output = pose_esitmation(frame, aruco_dict_type, k, d)
 
@@ -200,8 +203,6 @@ if __name__ == '__main__':
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     break
-        else:
-            print("drop")
 
     video.release()
     cv2.destroyAllWindows()
