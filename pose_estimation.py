@@ -15,6 +15,7 @@ import stat
 import os
 
 font = cv2.FONT_HERSHEY_SIMPLEX
+win_name = 'aero41 maker detection'
 #--- 180 deg rotation matrix around the x axis
 R_flip  = np.zeros((3,3), dtype=np.float32)
 R_flip[0,0] = 1.0
@@ -210,7 +211,10 @@ if __name__ == '__main__':
     parameters.detectInvertedMarker = 0
 
     if (args['preview']):
-        cv2.namedWindow('pose', cv2.WINDOW_NORMAL)
+        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+        w = args['resolution'][0]
+        h = args['resolution'][1]
+        cv2.resizeWindow(win_name, w, h)
 
     # Do the work
     prev = 0
@@ -232,8 +236,7 @@ if __name__ == '__main__':
             output = pose_esitmation(frame, aruco_dict_type, k, d, marker_size_mm)
 
             if (args['preview']):
-                cv2.imshow('pose', output)
-
+                cv2.imshow(win_name, output)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     break
