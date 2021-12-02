@@ -209,6 +209,9 @@ if __name__ == '__main__':
     parameters = cv2.aruco.DetectorParameters_create()
     parameters.detectInvertedMarker = 0
 
+    if (args['preview']):
+        cv2.namedWindow('pose', cv2.WINDOW_NORMAL)
+
     # Do the work
     prev = 0
     while True:
@@ -229,7 +232,7 @@ if __name__ == '__main__':
             output = pose_esitmation(frame, aruco_dict_type, k, d, marker_size_mm)
 
             if (args['preview']):
-                cv2.imshow('Estimated Pose', output)
+                cv2.imshow('pose', output)
 
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
