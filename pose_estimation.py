@@ -219,6 +219,7 @@ if __name__ == '__main__':
         if not ret:
             break
 
+        # Maybe drop some frame when using a live video
         if time_elapsed > 1./frame_rate or not device:
             prev = now
             ret, frame = video.retrieve()
