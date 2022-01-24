@@ -57,8 +57,8 @@ def calibrate(dirpath, square_size, width=13, height=9, visualize=False):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-d", "--dir", required=True, help="Path to folder containing checkerboard images for calibration")
-    ap.add_argument("-w", "--width", type=int, help="Width of checkerboard (default=13)")
-    ap.add_argument("-t", "--height", type=int, help="Height of checkerboard (default=9)")
+    ap.add_argument("-w", "--width", type=int, default=13, help="Width of checkerboard")
+    ap.add_argument("-t", "--height", type=int, default=9, help="Height of checkerboard")
     ap.add_argument("-s", "--square_size", type=float, default=1, help="Length of one edge (in metres)")
     ap.add_argument("-v", "--visualize", type=str, default="False", help="To visualize each checkerboard image")
     args = vars(ap.parse_args())
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     else:
         visualize = False
 
-    ret, mtx, dist, rvecs, tvecs = calibrate(dirpath, square_size, visualize=visualize)
+    ret, mtx, dist, rvecs, tvecs = calibrate(dirpath, square_size, width=args['width'], height=args['height'], visualize=visualize)
 
     print(mtx)
     print(dist)
